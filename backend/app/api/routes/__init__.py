@@ -1,0 +1,31 @@
+from app.api.routes import (
+    app_sections,
+    auth,
+    health,
+    imports,
+    jobs,
+    knowledge_categories,
+    organizations,
+    portfolio_items,
+    proposal_examples,
+    proposal_runs,
+    setup,
+    tag_links,
+    tags,
+)
+
+__all__ = [
+    "health",
+    "auth",
+    "imports",
+    "organizations",
+    "knowledge_categories",
+    "portfolio_items",
+    "proposal_examples",
+    "app_sections",
+    "tags",
+    "jobs",
+    "proposal_runs",
+    "setup",
+    "tag_links",
+]
