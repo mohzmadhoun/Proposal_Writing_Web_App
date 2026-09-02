@@ -1,11 +1,9 @@
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps.workspace import get_workspace_id
+from app.api.deps.workspace import WorkspaceContext, get_workspace_context, get_workspace_write_context
 from app.db.session import get_db
 from app.models.app_section import AppSection
 from app.schemas.app_section import AppSectionCreate, AppSectionRead, AppSectionUpdate
@@ -16,12 +14,12 @@ router = APIRouter(prefix="/app-sections", tags=["app-sections"])
 @router.get("", response_model=list[AppSectionRead])
 def list_app_sections(
     db: Session = Depends(get_db),
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace: WorkspaceContext = Depends(get_workspace_context),
 ) -> list[AppSection]:
     return list(
         db.scalars(
             select(AppSection)
-            .where(AppSection.organization_id == workspace_id)
+            .where(AppSection.organization_id == workspace.organization_id)
             .order_by(AppSection.created_at.desc())
         )
     )
@@ -31,9 +29,13 @@ def list_app_sections(
 def create_app_section(
     payload: AppSectionCreate,
     db: Session = Depends(get_db),
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace: WorkspaceContext = Depends(get_workspace_write_context),
 ) -> AppSection:
-    section = AppSection(organization_id=workspace_id, **payload.model_dump())
+    section = AppSection(
+        organization_id=workspace.organization_id,
+        created_by=workspace.user_id,
+        **payload.model_dump(),
+    )
     db.add(section)
     try:
         db.commit()
@@ -52,11 +54,11 @@ def update_app_section(
     slug: str,
     payload: AppSectionUpdate,
     db: Session = Depends(get_db),
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace: WorkspaceContext = Depends(get_workspace_write_context),
 ) -> AppSection:
     section = db.scalar(
         select(AppSection).where(
-            AppSection.organization_id == workspace_id,
+            AppSection.organization_id == workspace.organization_id,
             AppSection.slug == slug,
         )
     )

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps.workspace import get_workspace_id
+from app.api.deps.workspace import WorkspaceContext, get_workspace_context, get_workspace_write_context
 from app.db.session import get_db
 from app.models.knowledge_item import KnowledgeItem
 from app.models.portfolio_item import PortfolioItem
@@ -17,14 +17,14 @@ router = APIRouter(prefix="/portfolio-items", tags=["portfolio-items"])
 @router.get("", response_model=list[PortfolioItemRead])
 def list_portfolio_items(
     db: Session = Depends(get_db),
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace: WorkspaceContext = Depends(get_workspace_context),
     status_filter: str | None = Query(default=None, alias="status"),
     q: str | None = Query(default=None),
 ) -> list[PortfolioItemRead]:
     stmt = (
         select(PortfolioItem)
         .options(joinedload(PortfolioItem.knowledge_item))
-        .where(PortfolioItem.organization_id == workspace_id)
+        .where(PortfolioItem.organization_id == workspace.organization_id)
     )
     if status_filter:
         stmt = stmt.where(PortfolioItem.knowledge_item.has(status=status_filter))
@@ -51,11 +51,11 @@ def list_portfolio_items(
 def create_portfolio_item(
     payload: PortfolioItemCreate,
     db: Session = Depends(get_db),
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace: WorkspaceContext = Depends(get_workspace_write_context),
 ) -> PortfolioItemRead:
     existing = db.scalar(
         select(PortfolioItem).where(
-            PortfolioItem.organization_id == workspace_id,
+            PortfolioItem.organization_id == workspace.organization_id,
             PortfolioItem.project_code == payload.project_code,
         )
     )
@@ -63,7 +63,7 @@ def create_portfolio_item(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Project code already exists")
 
     knowledge_item = KnowledgeItem(
-        organization_id=workspace_id,
+        organization_id=workspace.organization_id,
         category_id=payload.category_id,
         item_type="portfolio",
         title=payload.title,
@@ -71,12 +71,13 @@ def create_portfolio_item(
         content=payload.content,
         status="active",
         metadata_json=payload.metadata_json,
+        created_by=workspace.user_id,
     )
     db.add(knowledge_item)
     db.flush()
 
     portfolio_item = PortfolioItem(
-        organization_id=workspace_id,
+        organization_id=workspace.organization_id,
         knowledge_item_id=knowledge_item.id,
         project_code=payload.project_code,
         project_name=payload.project_name,
@@ -90,6 +91,7 @@ def create_portfolio_item(
         restrictions=payload.restrictions,
         additional_urls=payload.additional_urls,
         related_proposal_ids=payload.related_proposal_ids,
+        created_by=workspace.user_id,
     )
     db.add(portfolio_item)
     db.commit()
@@ -109,12 +111,15 @@ def update_portfolio_item(
     portfolio_item_id: UUID,
     payload: PortfolioItemUpdate,
     db: Session = Depends(get_db),
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace: WorkspaceContext = Depends(get_workspace_write_context),
 ) -> PortfolioItemRead:
     item = db.scalar(
         select(PortfolioItem)
         .options(joinedload(PortfolioItem.knowledge_item))
-        .where(PortfolioItem.id == portfolio_item_id, PortfolioItem.organization_id == workspace_id)
+        .where(
+            PortfolioItem.id == portfolio_item_id,
+            PortfolioItem.organization_id == workspace.organization_id,
+        )
     )
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio item not found")

@@ -6,7 +6,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps.workspace import get_workspace_id
+from app.api.deps.workspace import WorkspaceContext, get_workspace_context, get_workspace_write_context
 from app.db.session import get_db
 from app.models.knowledge_category import KnowledgeCategory
 from app.schemas.knowledge_category import (
@@ -21,12 +21,12 @@ router = APIRouter(prefix="/knowledge-categories", tags=["knowledge-categories"]
 @router.get("", response_model=list[KnowledgeCategoryRead])
 def list_categories(
     db: Session = Depends(get_db),
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace: WorkspaceContext = Depends(get_workspace_context),
     category_type: Annotated[str | None, Query()] = None,
     status_filter: Annotated[str | None, Query(alias="status")] = None,
     q: Annotated[str | None, Query()] = None,
 ) -> list[KnowledgeCategory]:
-    stmt = select(KnowledgeCategory).where(KnowledgeCategory.organization_id == workspace_id)
+    stmt = select(KnowledgeCategory).where(KnowledgeCategory.organization_id == workspace.organization_id)
     if category_type:
         stmt = stmt.where(KnowledgeCategory.category_type == category_type)
     if status_filter:
@@ -48,9 +48,13 @@ def list_categories(
 def create_category(
     payload: KnowledgeCategoryCreate,
     db: Session = Depends(get_db),
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace: WorkspaceContext = Depends(get_workspace_write_context),
 ) -> KnowledgeCategory:
-    category = KnowledgeCategory(organization_id=workspace_id, **payload.model_dump())
+    category = KnowledgeCategory(
+        organization_id=workspace.organization_id,
+        created_by=workspace.user_id,
+        **payload.model_dump(),
+    )
     db.add(category)
     try:
         db.commit()
@@ -69,12 +73,12 @@ def update_category(
     category_id: UUID,
     payload: KnowledgeCategoryUpdate,
     db: Session = Depends(get_db),
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace: WorkspaceContext = Depends(get_workspace_write_context),
 ) -> KnowledgeCategory:
     category = db.scalar(
         select(KnowledgeCategory).where(
             KnowledgeCategory.id == category_id,
-            KnowledgeCategory.organization_id == workspace_id,
+            KnowledgeCategory.organization_id == workspace.organization_id,
         )
     )
     if not category:

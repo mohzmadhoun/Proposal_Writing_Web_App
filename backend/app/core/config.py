@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     app_env: str = "development"
     api_v1_prefix: str = "/api/v1"
     frontend_origin: str = "http://localhost:5173"
+    jwt_secret_key: str = "change-this-in-production"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 12
     database_url: str = Field(
         default="postgresql+psycopg://postgres:postgres@localhost:5432/proposal_app"
     )

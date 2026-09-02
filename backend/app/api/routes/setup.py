@@ -1,10 +1,8 @@
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps.workspace import get_workspace_id
+from app.api.deps.workspace import WorkspaceContext, get_workspace_write_context
 from app.db.session import get_db
 from app.models.app_section import AppSection
 from app.models.knowledge_category import KnowledgeCategory
@@ -15,7 +13,7 @@ router = APIRouter(prefix="/setup", tags=["setup"])
 @router.post("/seed-defaults", status_code=status.HTTP_201_CREATED)
 def seed_defaults(
     db: Session = Depends(get_db),
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace: WorkspaceContext = Depends(get_workspace_write_context),
 ) -> dict[str, int]:
     category_defaults = [
         ("Portfolio", "portfolio", "portfolio"),
@@ -31,14 +29,15 @@ def seed_defaults(
     for name, slug, category_type in category_defaults:
         exists = db.scalar(
             select(KnowledgeCategory).where(
-                KnowledgeCategory.organization_id == workspace_id,
+                KnowledgeCategory.organization_id == workspace.organization_id,
                 KnowledgeCategory.slug == slug,
             )
         )
         if not exists:
             db.add(
                 KnowledgeCategory(
-                    organization_id=workspace_id,
+                    organization_id=workspace.organization_id,
+                    created_by=workspace.user_id,
                     name=name,
                     slug=slug,
                     category_type=category_type,
@@ -53,14 +52,15 @@ def seed_defaults(
     for name, slug in section_defaults:
         exists = db.scalar(
             select(AppSection).where(
-                AppSection.organization_id == workspace_id,
+                AppSection.organization_id == workspace.organization_id,
                 AppSection.slug == slug,
             )
         )
         if not exists:
             db.add(
                 AppSection(
-                    organization_id=workspace_id,
+                    organization_id=workspace.organization_id,
+                    created_by=workspace.user_id,
                     name=name,
                     slug=slug,
                     section_type="authoritative",

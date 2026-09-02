@@ -14,8 +14,10 @@ npm run dev -- --host 0.0.0.0 --port 5173
 
 ## Current implementation
 
-- Dashboard with MVP foundation status
-- Knowledge module roadmap view
-- New Proposal intake form scaffold
-- Proposal History placeholder
-- App Sections placeholder
+- Login/register authentication
+- Workspace management
+- Knowledge entities CRUD starter flows
+- Job intake and proposal generation
+- Proposal history preview
+- App sections editor
+- Markdown import trigger

@@ -18,6 +18,16 @@ body {
   min-height: 100vh;
 }
 
+.auth-shell {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.auth-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 280px 1fr;
@@ -128,7 +138,8 @@ body {
 }
 
 .intake-form input,
-.intake-form textarea {
+.intake-form textarea,
+.content input {
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   padding: 0.7rem;

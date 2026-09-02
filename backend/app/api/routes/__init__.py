@@ -1,6 +1,8 @@
 from app.api.routes import (
     app_sections,
+    auth,
     health,
+    imports,
     jobs,
     knowledge_categories,
     organizations,
@@ -8,11 +10,14 @@ from app.api.routes import (
     proposal_examples,
     proposal_runs,
     setup,
+    tag_links,
     tags,
 )
 
 __all__ = [
     "health",
+    "auth",
+    "imports",
     "organizations",
     "knowledge_categories",
     "portfolio_items",
@@ -22,4 +27,5 @@ __all__ = [
     "jobs",
     "proposal_runs",
     "setup",
+    "tag_links",
 ]

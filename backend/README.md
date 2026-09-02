@@ -7,11 +7,14 @@ The backend exposes REST endpoints and business services for:
 
 ## Current API modules
 
+- auth (register, login, me)
 - organizations
 - knowledge-categories
 - app-sections
 - portfolio-items
 - proposal-examples
+- imports (markdown ingestion)
+- tag-links
 - jobs
 - proposal-runs (`/generate`)
 - setup (`/seed-defaults`)
@@ -29,3 +32,6 @@ uvicorn app.main:app --reload --port 8000
 Most endpoints are workspace-scoped and require:
 - `?workspace_id=<organization_uuid>` or
 - `X-Workspace-Id: <organization_uuid>`
+
+Authenticated routes require:
+- `Authorization: Bearer <access_token>`

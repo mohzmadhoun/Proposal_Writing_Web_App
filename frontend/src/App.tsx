@@ -2,8 +2,27 @@ import { useEffect, useMemo, useState } from 'react'
 
 type NavView = 'dashboard' | 'knowledge' | 'new-proposal' | 'history' | 'settings'
 type Org = { id: string; name: string; slug: string }
+type AuthUserMembership = {
+  organization_id: string
+  organization_name: string
+  organization_slug: string
+  role: string
+}
+type AuthUser = {
+  id: string
+  email: string
+  full_name: string | null
+  is_active: boolean
+  memberships: AuthUserMembership[]
+}
+type AuthResponse = {
+  access_token: string
+  token_type: string
+  user: AuthUser
+}
 type Category = { id: string; name: string; slug: string; category_type: string; status: string }
 type Section = { id: string; name: string; slug: string; content: string; version: number }
+type Tag = { id: string; name: string; tag_type: string }
 type PortfolioItem = {
   id: string
   project_code: string
@@ -40,7 +59,7 @@ const navItems: Array<{ key: NavView; label: string }> = [
   { key: 'knowledge', label: 'Knowledge Base' },
   { key: 'new-proposal', label: 'New Proposal' },
   { key: 'history', label: 'Proposal History' },
-  { key: 'settings', label: 'App Sections' },
+  { key: 'settings', label: 'Settings & Import' },
 ]
 
 function App() {
@@ -48,6 +67,16 @@ function App() {
   const [view, setView] = useState<NavView>('dashboard')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [token, setToken] = useState(localStorage.getItem('proposal_app_token') ?? '')
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
+
+  const [loginEmail, setLoginEmail] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [registerEmail, setRegisterEmail] = useState('')
+  const [registerPassword, setRegisterPassword] = useState('')
+  const [registerName, setRegisterName] = useState('')
+  const [registerOrgName, setRegisterOrgName] = useState('')
+  const [registerOrgSlug, setRegisterOrgSlug] = useState('')
 
   const [organizations, setOrganizations] = useState<Org[]>([])
   const [orgName, setOrgName] = useState('')
@@ -56,6 +85,7 @@ function App() {
 
   const [categories, setCategories] = useState<Category[]>([])
   const [sections, setSections] = useState<Section[]>([])
+  const [tags, setTags] = useState<Tag[]>([])
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([])
   const [proposalExamples, setProposalExamples] = useState<ProposalExample[]>([])
   const [jobs, setJobs] = useState<Job[]>([])
@@ -64,6 +94,10 @@ function App() {
   const [categoryName, setCategoryName] = useState('')
   const [categorySlug, setCategorySlug] = useState('')
   const [categoryType, setCategoryType] = useState('custom')
+  const [searchTerm, setSearchTerm] = useState('')
+
+  const [tagName, setTagName] = useState('')
+  const [tagType, setTagType] = useState('skill')
 
   const [portfolioTitle, setPortfolioTitle] = useState('')
   const [portfolioCode, setPortfolioCode] = useState('')
@@ -85,6 +119,11 @@ function App() {
   const [sectionName, setSectionName] = useState('About Me')
   const [sectionSlug, setSectionSlug] = useState('about-me')
   const [sectionContent, setSectionContent] = useState('')
+  const [importPath, setImportPath] = useState('/workspace/data/knowledge')
+
+  const [tagEntityType, setTagEntityType] = useState('portfolio_item')
+  const [tagEntityId, setTagEntityId] = useState('')
+  const [tagIdList, setTagIdList] = useState('')
 
   const questionCount = useMemo(
     () =>
@@ -95,44 +134,51 @@ function App() {
     [screeningQuestions],
   )
 
+  const filteredPortfolio = useMemo(() => {
+    if (!searchTerm.trim()) return portfolioItems
+    const q = searchTerm.toLowerCase()
+    return portfolioItems.filter(
+      (item) =>
+        item.project_name.toLowerCase().includes(q) ||
+        item.project_code.toLowerCase().includes(q) ||
+        item.technologies.join(' ').toLowerCase().includes(q),
+    )
+  }, [portfolioItems, searchTerm])
+
+  const filteredExamples = useMemo(() => {
+    if (!searchTerm.trim()) return proposalExamples
+    const q = searchTerm.toLowerCase()
+    return proposalExamples.filter(
+      (item) => item.title.toLowerCase().includes(q) || item.job_title.toLowerCase().includes(q),
+    )
+  }, [proposalExamples, searchTerm])
+
   const withWorkspace = (path: string): string =>
     selectedOrgId ? `${path}${path.includes('?') ? '&' : '?'}workspace_id=${selectedOrgId}` : path
 
+  function saveToken(value: string) {
+    if (!value) {
+      localStorage.removeItem('proposal_app_token')
+    } else {
+      localStorage.setItem('proposal_app_token', value)
+    }
+    setToken(value)
+  }
+
   async function readJson<T>(path: string, options?: RequestInit): Promise<T> {
-    const response = await fetch(`${apiBaseUrl}${path}`, options)
+    const headers = new Headers(options?.headers ?? {})
+    if (!headers.has('Content-Type') && options?.body) {
+      headers.set('Content-Type', 'application/json')
+    }
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`)
+    }
+    const response = await fetch(`${apiBaseUrl}${path}`, { ...options, headers })
     if (!response.ok) {
       const message = await response.text()
       throw new Error(message || `Request failed: ${response.status}`)
     }
     return (await response.json()) as T
-  }
-
-  async function loadOrganizations() {
-    const data = await readJson<Org[]>('/organizations')
-    setOrganizations(data)
-    if (!selectedOrgId && data.length > 0) {
-      setSelectedOrgId(data[0].id)
-    }
-  }
-
-  async function loadWorkspaceData(orgId = selectedOrgId) {
-    if (!orgId) return
-    const workspacePath = (path: string) =>
-      `${path}${path.includes('?') ? '&' : '?'}workspace_id=${orgId}`
-    const [cats, secs, portfolios, examples, jobList, runList] = await Promise.all([
-      readJson<Category[]>(workspacePath('/knowledge-categories')),
-      readJson<Section[]>(workspacePath('/app-sections')),
-      readJson<PortfolioItem[]>(workspacePath('/portfolio-items')),
-      readJson<ProposalExample[]>(workspacePath('/proposal-examples')),
-      readJson<Job[]>(workspacePath('/jobs')),
-      readJson<ProposalRun[]>(workspacePath('/proposal-runs')),
-    ])
-    setCategories(cats)
-    setSections(secs)
-    setPortfolioItems(portfolios)
-    setProposalExamples(examples)
-    setJobs(jobList)
-    setRuns(runList)
   }
 
   async function wrapAction(action: () => Promise<void>) {
@@ -148,27 +194,102 @@ function App() {
     }
   }
 
-  useEffect(() => {
-    void wrapAction(loadOrganizations)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  function applyAuthState(user: AuthUser) {
+    setCurrentUser(user)
+    const orgs = user.memberships.map((membership) => ({
+      id: membership.organization_id,
+      name: membership.organization_name,
+      slug: membership.organization_slug,
+    }))
+    setOrganizations(orgs)
+    if (orgs.length > 0 && !selectedOrgId) {
+      setSelectedOrgId(orgs[0].id)
+    }
+  }
+
+  async function loadCurrentUser() {
+    const me = await readJson<AuthUser>('/auth/me')
+    applyAuthState(me)
+  }
+
+  async function loadWorkspaceData(orgId = selectedOrgId) {
+    if (!orgId) return
+    const workspacePath = (path: string) =>
+      `${path}${path.includes('?') ? '&' : '?'}workspace_id=${orgId}`
+    const [cats, secs, tagList, portfolios, examples, jobList, runList] = await Promise.all([
+      readJson<Category[]>(workspacePath('/knowledge-categories')),
+      readJson<Section[]>(workspacePath('/app-sections')),
+      readJson<Tag[]>(workspacePath('/tags')),
+      readJson<PortfolioItem[]>(workspacePath('/portfolio-items')),
+      readJson<ProposalExample[]>(workspacePath('/proposal-examples')),
+      readJson<Job[]>(workspacePath('/jobs')),
+      readJson<ProposalRun[]>(workspacePath('/proposal-runs')),
+    ])
+    setCategories(cats)
+    setSections(secs)
+    setTags(tagList)
+    setPortfolioItems(portfolios)
+    setProposalExamples(examples)
+    setJobs(jobList)
+    setRuns(runList)
+  }
 
   useEffect(() => {
+    if (!token) return
+    void wrapAction(loadCurrentUser)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token])
+
+  useEffect(() => {
+    if (!token || !selectedOrgId) return
     void wrapAction(async () => {
       await loadWorkspaceData()
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedOrgId])
+  }, [selectedOrgId, token])
+
+  async function register() {
+    const response = await readJson<AuthResponse>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: registerEmail,
+        password: registerPassword,
+        full_name: registerName || null,
+        organization_name: registerOrgName || null,
+        organization_slug: registerOrgSlug || null,
+      }),
+    })
+    saveToken(response.access_token)
+    applyAuthState(response.user)
+    setRegisterEmail('')
+    setRegisterPassword('')
+    setRegisterName('')
+    setRegisterOrgName('')
+    setRegisterOrgSlug('')
+  }
+
+  async function login() {
+    const response = await readJson<AuthResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: loginEmail,
+        password: loginPassword,
+      }),
+    })
+    saveToken(response.access_token)
+    applyAuthState(response.user)
+    setLoginEmail('')
+    setLoginPassword('')
+  }
 
   async function createOrganization() {
     await readJson<Org>('/organizations', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: orgName, slug: orgSlug }),
     })
     setOrgName('')
     setOrgSlug('')
-    await loadOrganizations()
+    await loadCurrentUser()
   }
 
   async function seedDefaults() {
@@ -178,10 +299,17 @@ function App() {
     await loadWorkspaceData()
   }
 
+  async function importMarkdown() {
+    await readJson<Record<string, unknown>>(withWorkspace('/imports/markdown'), {
+      method: 'POST',
+      body: JSON.stringify({ directory_path: importPath }),
+    })
+    await loadWorkspaceData()
+  }
+
   async function createCategory() {
     await readJson<Category>(withWorkspace('/knowledge-categories'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: categoryName,
         slug: categorySlug,
@@ -193,10 +321,35 @@ function App() {
     await loadWorkspaceData()
   }
 
+  async function createTag() {
+    await readJson<Tag>(withWorkspace('/tags'), {
+      method: 'POST',
+      body: JSON.stringify({ name: tagName, tag_type: tagType }),
+    })
+    setTagName('')
+    await loadWorkspaceData()
+  }
+
+  async function syncTagLinks() {
+    const parsedTagIds = tagIdList
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean)
+    await readJson(withWorkspace('/tag-links/sync'), {
+      method: 'POST',
+      body: JSON.stringify({
+        entity_type: tagEntityType,
+        entity_id: tagEntityId,
+        tag_ids: parsedTagIds,
+      }),
+    })
+    setTagEntityId('')
+    setTagIdList('')
+  }
+
   async function createPortfolio() {
     await readJson<PortfolioItem>(withWorkspace('/portfolio-items'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: portfolioTitle,
         summary: portfolioOutcome,
@@ -221,7 +374,6 @@ function App() {
   async function createProposalExample() {
     await readJson<ProposalExample>(withWorkspace('/proposal-examples'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: exampleTitle,
         content: exampleProposal,
@@ -241,7 +393,6 @@ function App() {
   async function archivePortfolioItem(itemId: string) {
     await readJson<PortfolioItem>(withWorkspace(`/portfolio-items/${itemId}`), {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'archived' }),
     })
     await loadWorkspaceData()
@@ -250,7 +401,6 @@ function App() {
   async function archiveProposalExample(itemId: string) {
     await readJson<ProposalExample>(withWorkspace(`/proposal-examples/${itemId}`), {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'archived' }),
     })
     await loadWorkspaceData()
@@ -259,7 +409,6 @@ function App() {
   async function createJob() {
     await readJson<Job>(withWorkspace('/jobs'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: jobTitle,
         description: jobDescription,
@@ -280,7 +429,6 @@ function App() {
   async function archiveJob(jobId: string) {
     await readJson<Job>(withWorkspace(`/jobs/${jobId}`), {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'archived' }),
     })
     await loadWorkspaceData()
@@ -289,7 +437,6 @@ function App() {
   async function generateRun(jobId: string) {
     await readJson<{ run: ProposalRun }>(withWorkspace('/proposal-runs/generate'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ job_id: jobId }),
     })
     await loadWorkspaceData()
@@ -300,13 +447,11 @@ function App() {
     if (existing) {
       await readJson<Section>(withWorkspace(`/app-sections/${sectionSlug}`), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: sectionContent, name: sectionName }),
       })
     } else {
       await readJson<Section>(withWorkspace('/app-sections'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: sectionName,
           slug: sectionSlug,
@@ -318,11 +463,99 @@ function App() {
     await loadWorkspaceData()
   }
 
+  if (!token) {
+    return (
+      <main className="auth-shell">
+        <h1>Proposal Writing App</h1>
+        {error && <p className="error">Error: {error}</p>}
+        <section className="stack auth-grid">
+          <form className="intake-form">
+            <h2>Login</h2>
+            <input
+              placeholder="Email"
+              type="email"
+              value={loginEmail}
+              onChange={(event) => setLoginEmail(event.target.value)}
+            />
+            <input
+              placeholder="Password"
+              type="password"
+              value={loginPassword}
+              onChange={(event) => setLoginPassword(event.target.value)}
+            />
+            <button
+              type="button"
+              className="primary"
+              disabled={!loginEmail || !loginPassword || loading}
+              onClick={() => void wrapAction(login)}
+            >
+              Login
+            </button>
+          </form>
+
+          <form className="intake-form">
+            <h2>Register</h2>
+            <input
+              placeholder="Email"
+              type="email"
+              value={registerEmail}
+              onChange={(event) => setRegisterEmail(event.target.value)}
+            />
+            <input
+              placeholder="Password"
+              type="password"
+              value={registerPassword}
+              onChange={(event) => setRegisterPassword(event.target.value)}
+            />
+            <input
+              placeholder="Full name (optional)"
+              value={registerName}
+              onChange={(event) => setRegisterName(event.target.value)}
+            />
+            <input
+              placeholder="Initial workspace name (optional)"
+              value={registerOrgName}
+              onChange={(event) => setRegisterOrgName(event.target.value)}
+            />
+            <input
+              placeholder="Initial workspace slug (optional)"
+              value={registerOrgSlug}
+              onChange={(event) => setRegisterOrgSlug(event.target.value)}
+            />
+            <button
+              type="button"
+              className="primary"
+              disabled={!registerEmail || !registerPassword || loading}
+              onClick={() => void wrapAction(register)}
+            >
+              Register
+            </button>
+          </form>
+        </section>
+      </main>
+    )
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <h1>Proposal Assistant</h1>
         <p className="sidebar-note">API: {apiBaseUrl}</p>
+        <p className="sidebar-note">
+          Signed in as <strong>{currentUser?.email ?? 'unknown'}</strong>
+        </p>
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => {
+            saveToken('')
+            setCurrentUser(null)
+            setSelectedOrgId('')
+            setOrganizations([])
+          }}
+        >
+          Logout
+        </button>
         <nav>
           {navItems.map((item) => (
             <button
@@ -386,7 +619,7 @@ function App() {
 
         {view === 'dashboard' && (
           <section>
-            <h2>Foundation Status</h2>
+            <h2>Project Status</h2>
             <div className="grid">
               <article>
                 <h3>Categories</h3>
@@ -411,6 +644,12 @@ function App() {
         {view === 'knowledge' && (
           <section className="stack">
             <h2>Knowledge Base</h2>
+            <input
+              placeholder="Search local records"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+
             <form className="intake-form">
               <h3>Create category</h3>
               <input
@@ -443,6 +682,36 @@ function App() {
                 <div className="item-card" key={category.id}>
                   <strong>{category.name}</strong> ({category.slug}) · {category.category_type} ·{' '}
                   {category.status}
+                </div>
+              ))}
+            </div>
+
+            <form className="intake-form">
+              <h3>Create tag</h3>
+              <input
+                placeholder="Tag name"
+                value={tagName}
+                onChange={(event) => setTagName(event.target.value)}
+              />
+              <input
+                placeholder="Tag type"
+                value={tagType}
+                onChange={(event) => setTagType(event.target.value)}
+              />
+              <button
+                type="button"
+                className="primary"
+                disabled={!selectedOrgId || !tagName || loading}
+                onClick={() => void wrapAction(createTag)}
+              >
+                Create tag
+              </button>
+            </form>
+            <div className="preview">
+              <h3>Tags</h3>
+              {tags.map((tag) => (
+                <div className="item-card" key={tag.id}>
+                  {tag.name} <span className="subtle">({tag.tag_type})</span>
                 </div>
               ))}
             </div>
@@ -486,7 +755,7 @@ function App() {
             </form>
             <div className="preview">
               <h3>Portfolio records</h3>
-              {portfolioItems.map((item) => (
+              {filteredPortfolio.map((item) => (
                 <div className="item-card" key={item.id}>
                   <strong>
                     {item.project_name} ({item.project_code})
@@ -545,7 +814,7 @@ function App() {
             </form>
             <div className="preview">
               <h3>Proposal examples</h3>
-              {proposalExamples.map((item) => (
+              {filteredExamples.map((item) => (
                 <div className="item-card" key={item.id}>
                   <strong>{item.title}</strong>
                   <p>{item.job_title}</p>
@@ -679,7 +948,7 @@ function App() {
 
         {view === 'settings' && (
           <section className="stack">
-            <h2>Application Sections</h2>
+            <h2>Application Sections & Import</h2>
             <form className="intake-form">
               <input
                 placeholder="Section name"
@@ -714,6 +983,50 @@ function App() {
                 </div>
               ))}
             </div>
+
+            <form className="intake-form">
+              <h3>Import Markdown Knowledge</h3>
+              <input
+                placeholder="Directory path"
+                value={importPath}
+                onChange={(event) => setImportPath(event.target.value)}
+              />
+              <button
+                type="button"
+                className="primary"
+                disabled={!selectedOrgId || !importPath || loading}
+                onClick={() => void wrapAction(importMarkdown)}
+              >
+                Import directory
+              </button>
+            </form>
+
+            <form className="intake-form">
+              <h3>Sync Tag Links</h3>
+              <input
+                placeholder="Entity type (portfolio_item, proposal_example, job, app_section)"
+                value={tagEntityType}
+                onChange={(event) => setTagEntityType(event.target.value)}
+              />
+              <input
+                placeholder="Entity ID"
+                value={tagEntityId}
+                onChange={(event) => setTagEntityId(event.target.value)}
+              />
+              <input
+                placeholder="Tag IDs comma separated"
+                value={tagIdList}
+                onChange={(event) => setTagIdList(event.target.value)}
+              />
+              <button
+                type="button"
+                className="primary"
+                disabled={!selectedOrgId || !tagEntityId || loading}
+                onClick={() => void wrapAction(syncTagLinks)}
+              >
+                Sync tags
+              </button>
+            </form>
           </section>
         )}
       </main>

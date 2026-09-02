@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.api.deps.workspace import get_workspace_id
+from app.api.deps.workspace import WorkspaceContext, get_workspace_context, get_workspace_write_context
 from app.db.session import get_db
 from app.models.knowledge_item import KnowledgeItem
 from app.models.proposal_example import ProposalExample
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/proposal-examples", tags=["proposal-examples"])
 @router.get("", response_model=list[ProposalExampleRead])
 def list_proposal_examples(
     db: Session = Depends(get_db),
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace: WorkspaceContext = Depends(get_workspace_context),
     outcome: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
     q: str | None = Query(default=None),
@@ -29,7 +29,7 @@ def list_proposal_examples(
             joinedload(ProposalExample.knowledge_item),
             selectinload(ProposalExample.screening_qa),
         )
-        .where(ProposalExample.organization_id == workspace_id)
+        .where(ProposalExample.organization_id == workspace.organization_id)
     )
     if outcome:
         stmt = stmt.where(ProposalExample.outcome == outcome)
@@ -58,10 +58,10 @@ def list_proposal_examples(
 def create_proposal_example(
     payload: ProposalExampleCreate,
     db: Session = Depends(get_db),
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace: WorkspaceContext = Depends(get_workspace_write_context),
 ) -> ProposalExampleRead:
     knowledge_item = KnowledgeItem(
-        organization_id=workspace_id,
+        organization_id=workspace.organization_id,
         category_id=payload.category_id,
         item_type="proposal_example",
         title=payload.title,
@@ -69,12 +69,13 @@ def create_proposal_example(
         content=payload.content,
         status="active",
         metadata_json=payload.metadata_json,
+        created_by=workspace.user_id,
     )
     db.add(knowledge_item)
     db.flush()
 
     example = ProposalExample(
-        organization_id=workspace_id,
+        organization_id=workspace.organization_id,
         knowledge_item_id=knowledge_item.id,
         job_title=payload.job_title,
         job_description=payload.job_description,
@@ -89,6 +90,7 @@ def create_proposal_example(
         restrictions=payload.restrictions,
         related_portfolio_ids=payload.related_portfolio_ids,
         notes=payload.notes,
+        created_by=workspace.user_id,
     )
     db.add(example)
     db.flush()
@@ -96,11 +98,12 @@ def create_proposal_example(
     for qa in payload.screening_qa:
         db.add(
             ProposalExampleQA(
-                organization_id=workspace_id,
+                organization_id=workspace.organization_id,
                 proposal_example_id=example.id,
                 question=qa.question,
                 answer=qa.answer,
                 order_index=qa.order_index,
+                created_by=workspace.user_id,
             )
         )
 
@@ -127,7 +130,7 @@ def update_proposal_example(
     proposal_example_id: UUID,
     payload: ProposalExampleUpdate,
     db: Session = Depends(get_db),
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace: WorkspaceContext = Depends(get_workspace_write_context),
 ) -> ProposalExampleRead:
     example = db.scalar(
         select(ProposalExample)
@@ -135,7 +138,10 @@ def update_proposal_example(
             joinedload(ProposalExample.knowledge_item),
             selectinload(ProposalExample.screening_qa),
         )
-        .where(ProposalExample.id == proposal_example_id, ProposalExample.organization_id == workspace_id)
+        .where(
+            ProposalExample.id == proposal_example_id,
+            ProposalExample.organization_id == workspace.organization_id,
+        )
     )
     if not example:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposal example not found")

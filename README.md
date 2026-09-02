@@ -48,13 +48,19 @@ npm run dev -- --host 0.0.0.0 --port 5173
 
 - `GET /` root message
 - `GET /api/v1/health` healthcheck
+- `POST /api/v1/auth/register` register user (optional initial workspace)
+- `POST /api/v1/auth/login` login
+- `GET /api/v1/auth/me` current user and memberships
 - `GET /api/v1/organizations` list organizations
 - `POST /api/v1/organizations` create organization
 - `POST /api/v1/setup/seed-defaults` seed default categories/sections
+- `POST /api/v1/imports/markdown` import markdown knowledge
 - `GET/POST /api/v1/knowledge-categories`
 - `GET/POST/PATCH /api/v1/app-sections`
 - `GET/POST /api/v1/portfolio-items`
 - `GET/POST /api/v1/proposal-examples`
+- `GET/POST /api/v1/tags`
+- `GET/POST /api/v1/tag-links` (query + sync)
 - `GET/POST /api/v1/jobs`
 - `GET /api/v1/proposal-runs`
 - `POST /api/v1/proposal-runs/generate`
@@ -64,15 +70,18 @@ Workspace-scoped endpoints require `workspace_id` query param (or `X-Workspace-I
 ## Frontend (current)
 
 - Functional admin shell with:
+  - Login/register authentication
   - Workspace creation/selection
   - Default-seed action
   - Category creation
   - Portfolio item creation
   - Proposal example creation
+  - Tag creation and tag-link sync helper
   - Job intake
   - Proposal generation trigger
   - Proposal run history preview
   - App section create/update
+  - Markdown import trigger
 
 ## Next development targets
 
@@ -80,3 +89,11 @@ Workspace-scoped endpoints require `workspace_id` query param (or `X-Workspace-I
 2. Expand editing/archiving/search UX for all entities.
 3. Add semantic retrieval (pgvector) and richer ranking signals.
 4. Integrate configurable external LLM providers.
+
+## Sample knowledge import data
+
+Use the included sample directory for import tests:
+
+```text
+/workspace/data/knowledge
+```
