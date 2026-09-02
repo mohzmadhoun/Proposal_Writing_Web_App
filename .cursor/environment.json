@@ -1,7 +1,7 @@
 {
   "name": "proposal-writing-web-app",
   "install": "./scripts/bootstrap.sh",
-  "start": "docker compose up -d db",
+  "start": "docker info >/dev/null 2>&1 && docker compose up -d db || sudo docker compose up -d db",
   "terminals": {
     "backend-api": {
       "command": "cd backend && source .venv/bin/activate && alembic upgrade head && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"

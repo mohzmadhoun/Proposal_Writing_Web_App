@@ -4,7 +4,7 @@ bootstrap:
 	./scripts/bootstrap.sh
 
 db-up:
-	docker compose up -d db
+	docker info >/dev/null 2>&1 && docker compose up -d db || sudo docker compose up -d db
 
 migrate:
 	cd backend && source .venv/bin/activate && alembic upgrade head

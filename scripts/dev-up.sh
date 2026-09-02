@@ -3,9 +3,19 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+DOCKER_CMD=(docker)
+if ! docker info >/dev/null 2>&1; then
+  if sudo docker info >/dev/null 2>&1; then
+    DOCKER_CMD=(sudo docker)
+  else
+    echo "Docker daemon is not available. Start Docker first." >&2
+    exit 1
+  fi
+fi
+
 echo "==> Starting PostgreSQL (Docker)"
 cd "$ROOT_DIR"
-docker compose up -d db
+"${DOCKER_CMD[@]}" compose up -d db
 
 echo "==> Running database migrations"
 cd "$ROOT_DIR/backend"
