@@ -1,10 +1,10 @@
 # Proposal Writing Web App
 
-This repository contains the Phase 1 foundation described in the PRD:
+This repository now includes a working Phase 1 + core Phase 2/3 baseline from the PRD:
 - **Backend:** FastAPI + SQLAlchemy + Alembic
 - **Frontend:** React + TypeScript (Vite)
 - **Database:** PostgreSQL (pgvector image)
-- **Architecture direction:** tenant-aware from day one (`organizations`, `users`, `memberships`)
+- **Architecture direction:** tenant-aware from day one (workspace-scoped entities)
 
 ## Project structure
 
@@ -50,19 +50,33 @@ npm run dev -- --host 0.0.0.0 --port 5173
 - `GET /api/v1/health` healthcheck
 - `GET /api/v1/organizations` list organizations
 - `POST /api/v1/organizations` create organization
+- `POST /api/v1/setup/seed-defaults` seed default categories/sections
+- `GET/POST /api/v1/knowledge-categories`
+- `GET/POST/PATCH /api/v1/app-sections`
+- `GET/POST /api/v1/portfolio-items`
+- `GET/POST /api/v1/proposal-examples`
+- `GET/POST /api/v1/jobs`
+- `GET /api/v1/proposal-runs`
+- `POST /api/v1/proposal-runs/generate`
+
+Workspace-scoped endpoints require `workspace_id` query param (or `X-Workspace-Id` header).
 
 ## Frontend (current)
 
-- Admin shell with sections:
-  - Dashboard
-  - Knowledge Base plan
-  - New Proposal intake form scaffold
-  - Proposal History placeholder
-  - App Sections placeholder
+- Functional admin shell with:
+  - Workspace creation/selection
+  - Default-seed action
+  - Category creation
+  - Portfolio item creation
+  - Proposal example creation
+  - Job intake
+  - Proposal generation trigger
+  - Proposal run history preview
+  - App section create/update
 
 ## Next development targets
 
 1. Add authentication + workspace membership context.
-2. Implement knowledge entities (portfolio, proposal examples, app sections, tags).
-3. Add job intake + proposal run persistence.
-4. Implement retrieval and provider-agnostic proposal generation service.
+2. Expand editing/archiving/search UX for all entities.
+3. Add semantic retrieval (pgvector) and richer ranking signals.
+4. Integrate configurable external LLM providers.

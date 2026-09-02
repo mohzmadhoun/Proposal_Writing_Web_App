@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     app_name: str = "Proposal Writing Web App API"
     app_env: str = "development"
     api_v1_prefix: str = "/api/v1"
+    frontend_origin: str = "http://localhost:5173"
     database_url: str = Field(
         default="postgresql+psycopg://postgres:postgres@localhost:5432/proposal_app"
     )

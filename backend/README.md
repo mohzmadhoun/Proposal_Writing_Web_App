@@ -5,6 +5,17 @@ The backend exposes REST endpoints and business services for:
 - proposal generation orchestration
 - retrieval and source authority enforcement
 
+## Current API modules
+
+- organizations
+- knowledge-categories
+- app-sections
+- portfolio-items
+- proposal-examples
+- jobs
+- proposal-runs (`/generate`)
+- setup (`/seed-defaults`)
+
 ## Local development
 
 ```bash
@@ -14,3 +25,7 @@ pip install -e ".[dev]"
 alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
+
+Most endpoints are workspace-scoped and require:
+- `?workspace_id=<organization_uuid>` or
+- `X-Workspace-Id: <organization_uuid>`
