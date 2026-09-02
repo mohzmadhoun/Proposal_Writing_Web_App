@@ -8,7 +8,7 @@ dependencies = [
   "alembic",
   "fastapi",
   "pyjwt",
-  "passlib[bcrypt]",
+  "passlib",
   "pydantic-settings",
   "pydantic[email]",
   "python-dotenv",
