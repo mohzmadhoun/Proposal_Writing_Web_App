@@ -1,7 +1,7 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.api.deps.workspace import get_workspace_id
@@ -9,7 +9,7 @@ from app.db.session import get_db
 from app.models.knowledge_item import KnowledgeItem
 from app.models.proposal_example import ProposalExample
 from app.models.proposal_example_qa import ProposalExampleQA
-from app.schemas.proposal_example import ProposalExampleCreate, ProposalExampleRead
+from app.schemas.proposal_example import ProposalExampleCreate, ProposalExampleRead, ProposalExampleUpdate
 from app.services.serializers import proposal_example_to_read
 
 router = APIRouter(prefix="/proposal-examples", tags=["proposal-examples"])
@@ -19,16 +19,36 @@ router = APIRouter(prefix="/proposal-examples", tags=["proposal-examples"])
 def list_proposal_examples(
     db: Session = Depends(get_db),
     workspace_id: UUID = Depends(get_workspace_id),
+    outcome: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    q: str | None = Query(default=None),
 ) -> list[ProposalExampleRead]:
+    stmt = (
+        select(ProposalExample)
+        .options(
+            joinedload(ProposalExample.knowledge_item),
+            selectinload(ProposalExample.screening_qa),
+        )
+        .where(ProposalExample.organization_id == workspace_id)
+    )
+    if outcome:
+        stmt = stmt.where(ProposalExample.outcome == outcome)
+    if status_filter:
+        stmt = stmt.where(ProposalExample.knowledge_item.has(status=status_filter))
+    if q:
+        term = f"%{q}%"
+        stmt = stmt.where(
+            or_(
+                ProposalExample.job_title.ilike(term),
+                ProposalExample.job_description.ilike(term),
+                ProposalExample.submitted_proposal.ilike(term),
+                ProposalExample.knowledge_item.has(KnowledgeItem.title.ilike(term)),
+            )
+        )
+
     examples = list(
         db.scalars(
-            select(ProposalExample)
-            .options(
-                joinedload(ProposalExample.knowledge_item),
-                selectinload(ProposalExample.screening_qa),
-            )
-            .where(ProposalExample.organization_id == workspace_id)
-            .order_by(ProposalExample.created_at.desc())
+            stmt.order_by(ProposalExample.created_at.desc())
         )
     )
     return [proposal_example_to_read(example) for example in examples]
@@ -100,3 +120,53 @@ def create_proposal_example(
             detail="Could not load proposal example",
         )
     return proposal_example_to_read(created)
+
+
+@router.patch("/{proposal_example_id}", response_model=ProposalExampleRead)
+def update_proposal_example(
+    proposal_example_id: UUID,
+    payload: ProposalExampleUpdate,
+    db: Session = Depends(get_db),
+    workspace_id: UUID = Depends(get_workspace_id),
+) -> ProposalExampleRead:
+    example = db.scalar(
+        select(ProposalExample)
+        .options(
+            joinedload(ProposalExample.knowledge_item),
+            selectinload(ProposalExample.screening_qa),
+        )
+        .where(ProposalExample.id == proposal_example_id, ProposalExample.organization_id == workspace_id)
+    )
+    if not example:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposal example not found")
+
+    updates = payload.model_dump(exclude_unset=True)
+    knowledge = example.knowledge_item
+    knowledge_fields = {"category_id", "title", "summary", "content", "status", "metadata_json"}
+    for field in knowledge_fields:
+        if field in updates:
+            setattr(knowledge, field, updates[field])
+
+    direct_fields = {
+        "job_title",
+        "job_description",
+        "screening_questions",
+        "submitted_proposal",
+        "outcome",
+        "client_name",
+        "job_category",
+        "job_type",
+        "technologies",
+        "reusable_patterns",
+        "restrictions",
+        "related_portfolio_ids",
+        "notes",
+    }
+    for field in direct_fields:
+        if field in updates:
+            setattr(example, field, updates[field])
+
+    db.add_all([knowledge, example])
+    db.commit()
+    db.refresh(example)
+    return proposal_example_to_read(example)

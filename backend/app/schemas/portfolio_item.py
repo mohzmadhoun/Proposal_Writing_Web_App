@@ -26,10 +26,31 @@ class PortfolioItemCreate(BaseModel):
     metadata_json: dict = Field(default_factory=dict)
 
 
+class PortfolioItemUpdate(BaseModel):
+    category_id: UUID | None = None
+    title: str | None = None
+    summary: str | None = None
+    content: str | None = None
+    status: str | None = None
+    project_name: str | None = None
+    primary_url: str | None = None
+    capabilities: list[str] | None = None
+    responsibilities: str | None = None
+    technologies: list[str] | None = None
+    implementation_details: str | None = None
+    outcomes: str | None = None
+    evidence_boundaries: str | None = None
+    restrictions: str | None = None
+    additional_urls: list[str] | None = None
+    related_proposal_ids: list[str] | None = None
+    metadata_json: dict | None = None
+
+
 class PortfolioItemRead(AuditFields):
     organization_id: UUID
     knowledge_item_id: UUID
     category_id: UUID | None
+    status: str
     title: str
     summary: str | None
     content: str

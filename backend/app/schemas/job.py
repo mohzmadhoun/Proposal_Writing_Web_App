@@ -13,6 +13,14 @@ class JobCreate(BaseModel):
     status: str = "active"
 
 
+class JobUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    latest_user_instruction: str | None = None
+    screening_questions: list[str] | None = None
+    status: str | None = None
+
+
 class JobRead(AuditFields):
     organization_id: UUID
     title: str

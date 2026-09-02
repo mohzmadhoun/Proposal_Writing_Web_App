@@ -2,7 +2,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -23,10 +23,23 @@ def list_categories(
     db: Session = Depends(get_db),
     workspace_id: UUID = Depends(get_workspace_id),
     category_type: Annotated[str | None, Query()] = None,
+    status_filter: Annotated[str | None, Query(alias="status")] = None,
+    q: Annotated[str | None, Query()] = None,
 ) -> list[KnowledgeCategory]:
     stmt = select(KnowledgeCategory).where(KnowledgeCategory.organization_id == workspace_id)
     if category_type:
         stmt = stmt.where(KnowledgeCategory.category_type == category_type)
+    if status_filter:
+        stmt = stmt.where(KnowledgeCategory.status == status_filter)
+    if q:
+        term = f"%{q}%"
+        stmt = stmt.where(
+            or_(
+                KnowledgeCategory.name.ilike(term),
+                KnowledgeCategory.slug.ilike(term),
+                KnowledgeCategory.description.ilike(term),
+            )
+        )
     stmt = stmt.order_by(KnowledgeCategory.created_at.desc())
     return list(db.scalars(stmt))
 

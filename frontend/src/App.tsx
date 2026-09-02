@@ -10,14 +10,22 @@ type PortfolioItem = {
   project_name: string
   technologies: string[]
   outcomes: string | null
+  status?: string
 }
-type ProposalExample = { id: string; outcome: string; job_title: string; title: string }
+type ProposalExample = {
+  id: string
+  outcome: string
+  job_title: string
+  title: string
+  status?: string
+}
 type Job = {
   id: string
   title: string
   description: string
   screening_questions: string[]
   latest_user_instruction: string | null
+  status?: string
 }
 type ProposalRun = {
   id: string
@@ -230,6 +238,24 @@ function App() {
     await loadWorkspaceData()
   }
 
+  async function archivePortfolioItem(itemId: string) {
+    await readJson<PortfolioItem>(withWorkspace(`/portfolio-items/${itemId}`), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'archived' }),
+    })
+    await loadWorkspaceData()
+  }
+
+  async function archiveProposalExample(itemId: string) {
+    await readJson<ProposalExample>(withWorkspace(`/proposal-examples/${itemId}`), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'archived' }),
+    })
+    await loadWorkspaceData()
+  }
+
   async function createJob() {
     await readJson<Job>(withWorkspace('/jobs'), {
       method: 'POST',
@@ -248,6 +274,15 @@ function App() {
     setJobDescription('')
     setUserInstruction('')
     setScreeningQuestions('')
+    await loadWorkspaceData()
+  }
+
+  async function archiveJob(jobId: string) {
+    await readJson<Job>(withWorkspace(`/jobs/${jobId}`), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'archived' }),
+    })
     await loadWorkspaceData()
   }
 
@@ -402,6 +437,15 @@ function App() {
                 Create category
               </button>
             </form>
+            <div className="preview">
+              <h3>Categories</h3>
+              {categories.map((category) => (
+                <div className="item-card" key={category.id}>
+                  <strong>{category.name}</strong> ({category.slug}) · {category.category_type} ·{' '}
+                  {category.status}
+                </div>
+              ))}
+            </div>
 
             <form className="intake-form">
               <h3>Create portfolio item</h3>
@@ -440,6 +484,26 @@ function App() {
                 Save portfolio item
               </button>
             </form>
+            <div className="preview">
+              <h3>Portfolio records</h3>
+              {portfolioItems.map((item) => (
+                <div className="item-card" key={item.id}>
+                  <strong>
+                    {item.project_name} ({item.project_code})
+                  </strong>
+                  <p>{item.technologies.join(', ')}</p>
+                  <p>{item.outcomes ?? 'No outcomes yet.'}</p>
+                  <button
+                    type="button"
+                    className="ghost"
+                    disabled={loading}
+                    onClick={() => void wrapAction(async () => archivePortfolioItem(item.id))}
+                  >
+                    Archive
+                  </button>
+                </div>
+              ))}
+            </div>
 
             <form className="intake-form">
               <h3>Create proposal example</h3>
@@ -479,6 +543,24 @@ function App() {
                 Save proposal example
               </button>
             </form>
+            <div className="preview">
+              <h3>Proposal examples</h3>
+              {proposalExamples.map((item) => (
+                <div className="item-card" key={item.id}>
+                  <strong>{item.title}</strong>
+                  <p>{item.job_title}</p>
+                  <p>Outcome: {item.outcome}</p>
+                  <button
+                    type="button"
+                    className="ghost"
+                    disabled={loading}
+                    onClick={() => void wrapAction(async () => archiveProposalExample(item.id))}
+                  >
+                    Archive
+                  </button>
+                </div>
+              ))}
+            </div>
           </section>
         )}
 
@@ -549,6 +631,14 @@ function App() {
                     >
                       Generate proposal run
                     </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      disabled={loading}
+                      onClick={() => void wrapAction(async () => archiveJob(job.id))}
+                    >
+                      Archive
+                    </button>
                   </div>
                 ))
               )}
@@ -572,8 +662,8 @@ function App() {
                       <>
                         <h4>Screening answers</h4>
                         <ul>
-                          {run.screening_answers.map((qa) => (
-                            <li key={qa.question}>
+                          {run.screening_answers.map((qa, index) => (
+                            <li key={`${run.id}-${index}`}>
                               <strong>{qa.question}</strong>: {qa.answer}
                             </li>
                           ))}
